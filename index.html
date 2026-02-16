@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Collaborative Family Tree</title>
+    <title>Family Tree Project</title>
     <script src="https://unpkg.com/d3@7"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; display: flex; margin: 0; height: 100vh; overflow: hidden; background: #f0f2f5; }
-        #sidebar { width: 320px; background: #2c3e50; color: white; padding: 25px; box-shadow: 4px 0 10px rgba(0,0,0,0.2); z-index: 10; }
+        #sidebar { width: 320px; background: #2c3e50; color: white; padding: 25px; box-shadow: 4px 0 10px rgba(0,0,0,0.2); z-index: 10; overflow-y: auto; }
         h3 { margin-top: 0; color: #3498db; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-size: 0.85em; color: #bdc3c7; }
@@ -16,11 +16,11 @@
         .btn { width: 100%; padding: 12px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 10px; }
         .btn:hover { background: #2ecc71; }
         .btn-secondary { background: #7f8c8d; margin-top: 5px; }
-        #main-view { flex-grow: 1; position: relative; overflow: auto; }
+        #main-view { flex-grow: 1; position: relative; overflow: auto; display: flex; align-items: center; justify-content: center; }
         .node circle { fill: #3498db; stroke: #fff; stroke-width: 3px; cursor: pointer; transition: 0.2s; }
-        .node text { font: 14px sans-serif; font-weight: bold; pointer-events: none; }
+        .node text { font: 14px sans-serif; font-weight: bold; pointer-events: none; text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff; }
         .link { fill: none; stroke: #bdc3c7; stroke-width: 2px; }
-        .instructions { position: absolute; bottom: 20px; right: 20px; background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px; font-size: 0.8em; }
+        .instructions { position: absolute; bottom: 20px; right: 20px; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 5px; font-size: 0.8em; color: #333; border: 1px solid #ccc; }
     </style>
 </head>
 <body>
@@ -29,51 +29,57 @@
     <h3 id="form-title">➕ Add Member</h3>
     <div class="form-group">
         <label>Full Name</label>
-        <input type="text" id="member-name" placeholder="e.g. John Smith">
+        <input type="text" id="member-name" placeholder="e.g. Grandma Rose">
     </div>
     <div class="form-group">
-        <label>Birth Year (Approx)</label>
-        <input type="number" id="birth-year" placeholder="1950">
+        <label>Birth Year</label>
+        <input type="number" id="birth-year" placeholder="1945">
     </div>
     <div class="form-group">
-        <label>Parent</label>
+        <label>Parent (Link them here)</label>
         <select id="parent-select">
-            <option value="">Unknown / Root</option>
+            <option value="">No Parent (Root)</option>
         </select>
     </div>
-    <button class="btn" id="submit-btn" onclick="handleSave()">Add to Tree</button>
-    <button class="btn btn-secondary" onclick="resetForm()">Clear / New</button>
+    <button class="btn" id="submit-btn" onclick="handleSave()">Save to Tree</button>
+    <button class="btn btn-secondary" onclick="resetForm()">New / Clear</button>
 </div>
 
 <div id="main-view">
     <div id="tree-container"></div>
-    <div class="instructions">Click a circle to edit or link that person to a parent.</div>
+    <div class="instructions">
+        <strong>How to use:</strong><br>
+        1. Add the oldest ancestor first.<br>
+        2. To link someone, select their parent from the list.<br>
+        3. Click any circle to edit that person.
+    </div>
 </div>
 
 <script>
-    // 1. CONFIGURATION
+    // 1. DATABASE CONNECTION
     const SUPABASE_URL = 'https://qpeorqovecuyrutfbbkp.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_jPDlKDqjVeOABl37jjWF2Q_nozLNYNj';
     
-    // Fixed initialization syntax
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // Using window.supabase to ensure the library is found
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let selectedMemberId = null;
 
-    // 2. LOAD DATA FROM SUPABASE
+    // 2. FETCH DATA
     async function loadData() {
-        const { data: members, error } = await supabase
+        const { data: members, error } = await supabaseClient
             .from('family_members')
             .select('*')
             .order('name', { ascending: true });
 
         if (error) {
-            console.error("Supabase Error:", error.message);
+            console.error("Fetch error:", error.message);
             return;
         }
 
+        // Update dropdown
         const select = document.getElementById('parent-select');
-        select.innerHTML = '<option value="">Unknown / Root</option>';
+        select.innerHTML = '<option value="">No Parent (Root)</option>';
         members.forEach(m => {
             let opt = document.createElement('option');
             opt.value = m.id;
@@ -81,13 +87,18 @@
             select.appendChild(opt);
         });
 
-        if (members && members.length > 0) renderTree(members);
+        if (members && members.length > 0) {
+            renderTree(members);
+        } else {
+            document.getElementById('tree-container').innerHTML = "<p style='color:#7f8c8d'>The tree is empty. Add the first person!</p>";
+        }
     }
 
-    // 3. RENDER TREE WITH D3.JS
+    // 3. DRAW THE TREE (D3.js)
     function renderTree(data) {
         d3.select("#tree-container").selectAll("*").remove();
-        const width = 1000, height = 800;
+        
+        const width = 800, height = 600;
 
         try {
             const stratify = d3.stratify()
@@ -95,21 +106,23 @@
                 .parentId(d => d.parent_id);
 
             const root = stratify(data);
-            const treeLayout = d3.tree().size([width - 200, height - 400]);
+            const treeLayout = d3.tree().size([width - 100, height - 200]);
             treeLayout(root);
 
             const svg = d3.select("#tree-container").append("svg")
                 .attr("width", width)
                 .attr("height", height)
                 .append("g")
-                .attr("transform", "translate(100,80)");
+                .attr("transform", "translate(50,80)");
 
+            // Draw Lines
             svg.selectAll(".link")
                 .data(root.links())
                 .enter().append("path")
                 .attr("class", "link")
                 .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y));
 
+            // Draw People
             const node = svg.selectAll(".node")
                 .data(root.descendants())
                 .enter().append("g")
@@ -118,36 +131,44 @@
                 .on("click", (e, d) => selectMember(d.data));
 
             node.append("circle").attr("r", 15);
-            node.append("text").attr("dy", ".35em").attr("y", 25)
-                .style("text-anchor", "middle").text(d => d.data.name);
+            node.append("text")
+                .attr("dy", ".35em")
+                .attr("y", 25)
+                .style("text-anchor", "middle")
+                .text(d => d.data.name);
 
         } catch (e) {
-            console.warn("Tree visualization error: This usually happens if there are multiple roots or loops in the data.");
+            console.warn("Tree logic error:", e.message);
+            document.getElementById('tree-container').innerHTML = "<p style='color:#e74c3c'>Connect disconnected members by giving them a parent!</p>";
         }
     }
 
-    // 4. SAVE / UPDATE LOGIC
+    // 4. ADD / EDIT LOGIC
     async function handleSave() {
-        const name = document.getElementById('member-name').value;
-        const year = document.getElementById('birth-year').value;
-        const parentId = document.getElementById('parent-select').value;
+        const nameInput = document.getElementById('member-name');
+        const yearInput = document.getElementById('birth-year');
+        const parentInput = document.getElementById('parent-select');
 
-        if (!name) return alert("Name is required");
+        if (!nameInput.value) return alert("Please enter a name.");
 
         const payload = { 
-            name: name, 
-            birth_year: year ? parseInt(year) : null, 
-            parent_id: parentId ? parseInt(parentId) : null 
+            name: nameInput.value, 
+            birth_year: yearInput.value ? parseInt(yearInput.value) : null, 
+            parent_id: parentInput.value ? parseInt(parentInput.value) : null 
         };
 
+        let response;
         if (selectedMemberId) {
-            const { error } = await supabase.from('family_members').update(payload).eq('id', selectedMemberId);
-            if (error) alert(error.message);
+            response = await supabaseClient.from('family_members').update(payload).eq('id', selectedMemberId);
         } else {
-            const { error } = await supabase.from('family_members').insert([payload]);
-            if (error) alert(error.message);
+            response = await supabaseClient.from('family_members').insert([payload]);
         }
-        location.reload();
+
+        if (response.error) {
+            alert("Database Error: " + response.error.message);
+        } else {
+            location.reload(); 
+        }
     }
 
     function selectMember(member) {
@@ -156,7 +177,7 @@
         document.getElementById('member-name').value = member.name;
         document.getElementById('birth-year').value = member.birth_year || "";
         document.getElementById('parent-select').value = member.parent_id || "";
-        document.getElementById('submit-btn').innerText = "Update Info";
+        document.getElementById('submit-btn').innerText = "Update Member";
     }
 
     function resetForm() {
@@ -165,9 +186,10 @@
         document.getElementById('member-name').value = "";
         document.getElementById('birth-year').value = "";
         document.getElementById('parent-select').value = "";
-        document.getElementById('submit-btn').innerText = "Add to Tree";
+        document.getElementById('submit-btn').innerText = "Save to Tree";
     }
 
+    // Startup
     loadData();
 </script>
 </body>
