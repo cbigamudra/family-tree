@@ -16,41 +16,130 @@
             --card-bg: #ffffff;
         }
 
-        body { font-family: 'Inter', -apple-system, sans-serif; display: flex; margin: 0; height: 100vh; background: var(--bg-canvas); color: var(--text-main); overflow: hidden; }
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
+            display: flex; 
+            margin: 0; 
+            height: 100vh; 
+            background: var(--bg-canvas); 
+            color: var(--text-main); 
+            overflow: hidden; 
+        }
         
         #sidebar { 
-            width: 320px; background: var(--bg-sidebar); color: #fff; padding: 30px 20px; 
-            box-shadow: 5px 0 15px rgba(0,0,0,0.1); z-index: 10; overflow-y: auto;
+            width: 320px; 
+            background: var(--bg-sidebar); 
+            color: #fff; 
+            padding: 30px 20px; 
+            box-shadow: 5px 0 15px rgba(0,0,0,0.1); 
+            z-index: 10; 
+            overflow-y: auto;
         }
+
         h2 { font-weight: 300; letter-spacing: 1px; margin-bottom: 30px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        
         .form-group { margin-bottom: 20px; }
-        label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 8px; }
-        input, select { 
-            width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #333; 
-            background: #25282c; color: #fff; font-size: 14px; transition: border 0.3s; box-sizing: border-box;
+        
+        label { 
+            display: block; 
+            font-size: 11px; 
+            text-transform: uppercase; 
+            letter-spacing: 1px; 
+            color: #888; 
+            margin-bottom: 8px; 
         }
+
+        input, select { 
+            width: 100%; 
+            padding: 12px; 
+            border-radius: 6px; 
+            border: 1px solid #333; 
+            background: #25282c; 
+            color: #fff; 
+            font-size: 14px; 
+            transition: border 0.3s; 
+            box-sizing: border-box;
+        }
+        
         input:focus { border-color: var(--primary); outline: none; }
         
         .btn { 
-            width: 100%; padding: 14px; border: none; border-radius: 6px; cursor: pointer; 
-            font-weight: 600; font-size: 14px; margin-top: 10px; transition: all 0.2s ease;
+            width: 100%; 
+            padding: 14px; 
+            border: none; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-weight: 600; 
+            font-size: 14px; 
+            margin-top: 10px; 
+            transition: all 0.2s ease;
         }
+
         #submit-btn { background: var(--primary); color: white; }
         #submit-btn:hover { background: #3d7a35; transform: translateY(-1px); }
-        .btn-reset { background: transparent; color: #888; border: 1px solid #333; }
+        
+        .btn-reset { 
+            background: transparent; 
+            color: #888; 
+            border: 1px solid #333; 
+        }
         .btn-reset:hover { color: #fff; border-color: #555; }
 
-        #main-view { flex-grow: 1; overflow: auto; position: relative; cursor: grab; }
-        #tree-canvas { min-width: 3000px; min-height: 3000px; }
+        #main-view { 
+            flex-grow: 1; 
+            overflow: auto; 
+            position: relative; 
+            cursor: grab;
+        }
 
-        .node rect { fill: var(--card-bg); stroke: #e0e0e0; stroke-width: 1px; rx: 8; ry: 8; transition: all 0.3s ease; cursor: pointer; }
-        .node:hover rect { stroke: var(--primary); filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1)); }
-        .node.selected rect { stroke: var(--primary); stroke-width: 3px; fill: #f0f7ef; }
+        /* Large canvas for big trees */
+        #tree-canvas { 
+            min-width: 4000px; 
+            min-height: 4000px; 
+        }
+
+        .node rect { 
+            fill: var(--card-bg); 
+            stroke: #e0e0e0; 
+            stroke-width: 1px; 
+            rx: 8; 
+            ry: 8; 
+            transition: all 0.3s ease; 
+            cursor: pointer; 
+        }
+
+        .node:hover rect { 
+            stroke: var(--primary); 
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1)); 
+        }
+
+        .node.selected rect { 
+            stroke: var(--primary); 
+            stroke-width: 3px; 
+            fill: #f0f7ef; 
+        }
         
-        .node text.name { font-size: 14px; font-weight: 600; fill: var(--text-main); text-anchor: middle; pointer-events: none; }
+        .node text.name { 
+            font-size: 14px; 
+            font-weight: 600; 
+            fill: var(--text-main); 
+            text-anchor: middle; 
+            pointer-events: none; 
+        }
         
-        .link { fill: none; stroke: #d1d8dd; stroke-width: 2px; }
-        .spouse-link { fill: none; stroke: var(--accent); stroke-width: 2px; stroke-dasharray: 6,4; opacity: 0.7; }
+        .link { 
+            fill: none; 
+            stroke: #d1d8dd; 
+            stroke-width: 2px; 
+        }
+
+        .spouse-link { 
+            fill: none; 
+            stroke: var(--accent); 
+            stroke-width: 2px; 
+            stroke-dasharray: 6,4; 
+            opacity: 0.7; 
+        }
     </style>
 </head>
 <body>
@@ -71,7 +160,7 @@
     </div>
     <div class="form-group">
         <label>Spouse</label>
-        <select id="sp-select"><option value="">None</option></select>
+        <select id="spouse-select"><option value="">None</option></select>
     </div>
     <button id="submit-btn" class="btn" onclick="handleSave()">Save Connection</button>
     <button class="btn btn-reset" onclick="resetForm()">Add New Person</button>
@@ -90,22 +179,24 @@
     let allData = [];
 
     async function loadData() {
-        console.log("Loading data...");
+        console.log("Fetching members...");
         const { data: members, error } = await supabaseClient.from('family_members').select('*');
         if (error) {
             console.error("Fetch Error:", error);
             return;
         }
         allData = members || [];
-        console.log("Data loaded:", allData);
 
-        const menus = ['p1-select', 'p2-select', 'sp-select'];
-        menus.forEach(id => {
+        // Synchronize all 3 dropdowns with HTML IDs
+        const dropdowns = ['p1-select', 'p2-select', 'spouse-select'];
+        dropdowns.forEach(id => {
             const el = document.getElementById(id);
-            el.innerHTML = '<option value="">None</option>';
-            allData.forEach(m => {
-                el.innerHTML += `<option value="${m.id}">${m.name}</option>`;
-            });
+            if (el) {
+                el.innerHTML = '<option value="">None</option>';
+                allData.forEach(m => {
+                    el.innerHTML += `<option value="${m.id}">${m.name}</option>`;
+                });
+            }
         });
 
         drawClassicTree(allData);
@@ -113,14 +204,16 @@
 
     function drawClassicTree(data) {
         d3.select("#tree-canvas").selectAll("*").remove();
-        const svg = d3.select("#tree-canvas").append("svg")
-            .attr("width", 3000).attr("height", 2000);
         
-        const g = svg.append("g").attr("transform", "translate(100,100)");
+        const svg = d3.select("#tree-canvas").append("svg")
+            .attr("width", 4000)
+            .attr("height", 3000);
+        
+        const g = svg.append("g").attr("transform", "translate(150,150)");
 
-        const nodeW = 160, nodeH = 60, vertGap = 150, horizGap = 220;
+        const nodeW = 180, nodeH = 60, vertGap = 160, horizGap = 240;
 
-        // Level Logic
+        // Level / Generation Logic
         const nodes = data.map(d => ({ ...d }));
         nodes.forEach(n => {
             let depth = 0;
@@ -143,18 +236,23 @@
             levelCounts[n.level]++;
         });
 
-        // Elbow Connectors
+        // Drawing Elbow Relationship Lines
         nodes.forEach(n => {
+            // Parent Links
             [n.parent_id, n.parent_2_id].forEach(pid => {
                 if (pid) {
                     const p = nodes.find(x => x.id == pid);
                     if (p) {
                         const midY = (p.y + nodeH + n.y) / 2;
                         g.append("path").attr("class", "link")
-                            .attr("d", `M ${p.x + nodeW/2} ${p.y + nodeH} L ${p.x + nodeW/2} ${midY} L ${n.x + nodeW/2} ${midY} L ${n.x + nodeW/2} ${n.y}`);
+                            .attr("d", `M ${p.x + nodeW/2} ${p.y + nodeH} 
+                                        L ${p.x + nodeW/2} ${midY} 
+                                        L ${n.x + nodeW/2} ${midY} 
+                                        L ${n.x + nodeW/2} ${n.y}`);
                     }
                 }
             });
+            // Spouse Links
             if (n.spouse_id) {
                 const s = nodes.find(x => x.id == n.spouse_id);
                 if (s) {
@@ -164,15 +262,19 @@
             }
         });
 
-        // Cards
+        // Drawing Member Cards
         const nodeG = g.selectAll(".node").data(nodes).enter().append("g")
             .attr("class", d => "node" + (d.id === selectedId ? " selected" : ""))
             .attr("transform", d => `translate(${d.x},${d.y})`)
             .on("click", (e, d) => editMode(d));
 
         nodeG.append("rect").attr("width", nodeW).attr("height", nodeH);
-        nodeG.append("text").attr("class", "name")
-            .attr("x", nodeW/2).attr("y", nodeH/2 + 6).text(d => d.name);
+        
+        nodeG.append("text")
+            .attr("class", "name")
+            .attr("x", nodeW/2)
+            .attr("y", nodeH/2 + 6)
+            .text(d => d.name);
     }
 
     function editMode(d) {
@@ -183,6 +285,8 @@
         document.getElementById('p2-select').value = d.parent_2_id || "";
         document.getElementById('spouse-select').value = d.spouse_id || "";
         document.getElementById('submit-btn').innerText = "Update Record";
+        
+        // Visual refresh to show selected state
         drawClassicTree(allData);
     }
 
@@ -198,29 +302,33 @@
     }
 
     async function handleSave() {
-        const name = document.getElementById('member-name').value;
-        if (!name) return alert("Please enter a name.");
+        const nameInput = document.getElementById('member-name');
+        const p1Input = document.getElementById('p1-select');
+        const p2Input = document.getElementById('p2-select');
+        const spouseInput = document.getElementById('spouse-select');
 
-        const body = {
-            name: name,
-            parent_id: document.getElementById('p1-select').value || null,
-            parent_2_id: document.getElementById('p2-select').value || null,
-            spouse_id: document.getElementById('spouse-select').value || null
+        if (!nameInput.value) return alert("Please enter a name.");
+
+        const payload = {
+            name: nameInput.value,
+            parent_id: p1Input.value || null,
+            parent_2_id: p2Input.value || null,
+            spouse_id: spouseInput.value || null
         };
 
         try {
             let res;
             if (selectedId) {
-                res = await supabaseClient.from('family_members').update(body).eq('id', selectedId);
+                res = await supabaseClient.from('family_members').update(payload).eq('id', selectedId);
             } else {
-                res = await supabaseClient.from('family_members').insert([body]);
+                res = await supabaseClient.from('family_members').insert([payload]);
             }
             
             if (res.error) throw res.error;
             location.reload();
         } catch (err) {
-            console.error("Save failed:", err.message);
-            alert("Save failed: " + err.message);
+            console.error("Save Operation Failed:", err.message);
+            alert("Could not save: " + err.message);
         }
     }
 
