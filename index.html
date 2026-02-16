@@ -1,57 +1,129 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Our Family Tree</title>
-    <script src="https://unpkg.com/d3@7"></script>
+    <meta charset="UTF-8">
+    <title>Family Tree Project</title>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: sans-serif; background: #f4f7f6; margin: 0; }
-        #auth-ui { padding: 20px; text-align: center; background: white; border-bottom: 1px solid #ddd; }
-        #tree-container { width: 100%; height: 80vh; overflow: auto; }
-        .node circle { fill: #fff; stroke: #3498db; stroke-width: 3px; }
-        .node text { font: 12px sans-serif; }
-        .link { fill: none; stroke: #ccc; stroke-width: 2px; }
-        .btn { padding: 10px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 5px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; margin: 0; height: 100vh; }
+        #sidebar { width: 300px; background: #2c3e50; color: white; padding: 20px; box-shadow: 2px 0 5px rgba(0,0,0,0.1); }
+        #main-view { flex-grow: 1; background: #ecf0f1; padding: 20px; position: relative; }
+        
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-size: 0.9em; }
+        input, select { width: 100%; padding: 8px; border-radius: 4px; border: none; }
+        
+        .btn { width: 100%; padding: 10px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn:hover { background: #2ecc71; }
+        
+        #tree-display { border: 2px dashed #bdc3c7; height: 90%; display: flex; align-items: center; justify-content: center; color: #7f8c8d; }
     </style>
 </head>
 <body>
 
-<div id="auth-ui">
-    <h2>🌳 Family Tree Project</h2>
-    <div id="user-info">
-        <input type="email" id="email" placeholder="Email">
-        <button class="btn" onclick="signIn()">Login with Magic Link</button>
+<div id="sidebar">
+    <h3>➕ Add Family Member</h3>
+    <hr>
+    <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" id="member-name" placeholder="e.g. Jane Doe">
+    </div>
+    <div class="form-group">
+        <label>Birth Year</label>
+        <input type="number" id="birth-year" placeholder="1990">
+    </div>
+    <div class="form-group">
+        <label>Parent (Optional)</label>
+        <select id="parent-select">
+            <option value="">None (Root of Tree)</option>
+            </select>
+    </div>
+    <button class="btn" onclick="addMember()">Add to Tree</button>
+</div>
+
+<div id="main-view">
+    <h2>Family Tree Visualization</h2>
+    <div id="tree-display">
+        Your tree will render here after you connect Supabase.
     </div>
 </div>
 
-<div id="tree-container"></div>
-
 <script>
-    // 1. CONFIGURATION (Replace with your Supabase details)
-    const SUPABASE_URL = 'https://your-project.supabase.co';
-    const SUPABASE_KEY = 'your-anon-key';
-    const supabase = lib.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const SUPABASE_URL = 'https://qpeorqovecuyrutfbbkp.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_jPDlKDqjVeOABl37jjWF2Q_nozLNYNj';
+    const supabase = lib.createClient(https://qpeorqovecuyrutfbbkp.supabase.co, sb_publishable_jPDlKDqjVeOABl37jjWF2Q_nozLNYNj);
 
-    // 2. AUTH LOGIC
-    async function signIn() {
-        const email = document.getElementById('email').value;
-        const { error } = await supabase.auth.signInWithOtp({ email });
-        if (error) alert(error.message);
-        else alert("Check your email for the login link!");
+    async function loadData() {
+        const { data: members, error } = await supabase.from('family_members').select('*');
+        if (error) return console.error(error);
+        
+        // Populate the "Parent" dropdown
+        const select = document.getElementById('parent-select');
+        members.forEach(m => {
+            let opt = document.createElement('option');
+            opt.value = m.id;
+            opt.innerHTML = m.name;
+            select.appendChild(opt);
+        });
+
+        if (members.length > 0) renderTree(members);
     }
 
-    // 3. TREE VISUALIZATION (D3.js)
     function renderTree(data) {
-        // [Logic to draw the lines and circles based on family data]
-        // This is where D3.js converts JSON into a visual diagram.
+        const width = 800;
+        const height = 500;
+
+        // 1. Convert flat data into a Hierarchy
+        // D3 needs a "root" to start drawing
+        const stratify = d3.stratify()
+            .id(d => d.id)
+            .parentId(d => d.parent_id);
+
+        const root = stratify(data);
+        const treeLayout = d3.tree().size([width - 100, height - 100]);
+        treeLayout(root);
+
+        const svg = d3.select("#tree-display").append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .append("g")
+            .attr("transform", "translate(50,50)");
+
+        // 2. Draw the Lines (Links)
+        svg.selectAll(".link")
+            .data(root.links())
+            .enter().append("path")
+            .attr("class", "link")
+            .attr("d", d3.linkVertical()
+                .x(d => d.x)
+                .y(d => d.y))
+            .style("fill", "none")
+            .style("stroke", "#bdc3c7")
+            .style("stroke-width", "2px");
+
+        // 3. Draw the Circles (Nodes)
+        const node = svg.selectAll(".node")
+            .data(root.descendants())
+            .enter().append("g")
+            .attr("transform", d => `translate(${d.x},${d.y})`);
+
+        node.append("circle")
+            .attr("r", 20)
+            .style("fill", "#3498db")
+            .style("stroke", "white")
+            .style("stroke-width", "3px");
+
+        node.append("text")
+            .attr("dy", ".35em")
+            .attr("y", 30)
+            .style("text-anchor", "middle")
+            .text(d => d.data.name)
+            .style("fill", "#2c3e50")
+            .style("font-weight", "bold");
     }
 
-    // Load data on start
-    async function loadTree() {
-        let { data: members } = await supabase.from('family_members').select('*');
-        if (members) renderTree(members);
-    }
-    loadTree();
+    loadData();
 </script>
+
 </body>
 </html>
