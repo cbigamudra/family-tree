@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Our Family Tree</title>
+    <script src="https://unpkg.com/d3@7"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: sans-serif; background: #f4f7f6; margin: 0; }
+        #auth-ui { padding: 20px; text-align: center; background: white; border-bottom: 1px solid #ddd; }
+        #tree-container { width: 100%; height: 80vh; overflow: auto; }
+        .node circle { fill: #fff; stroke: #3498db; stroke-width: 3px; }
+        .node text { font: 12px sans-serif; }
+        .link { fill: none; stroke: #ccc; stroke-width: 2px; }
+        .btn { padding: 10px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+<div id="auth-ui">
+    <h2>🌳 Family Tree Project</h2>
+    <div id="user-info">
+        <input type="email" id="email" placeholder="Email">
+        <button class="btn" onclick="signIn()">Login with Magic Link</button>
+    </div>
+</div>
+
+<div id="tree-container"></div>
+
+<script>
+    // 1. CONFIGURATION (Replace with your Supabase details)
+    const SUPABASE_URL = 'https://your-project.supabase.co';
+    const SUPABASE_KEY = 'your-anon-key';
+    const supabase = lib.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // 2. AUTH LOGIC
+    async function signIn() {
+        const email = document.getElementById('email').value;
+        const { error } = await supabase.auth.signInWithOtp({ email });
+        if (error) alert(error.message);
+        else alert("Check your email for the login link!");
+    }
+
+    // 3. TREE VISUALIZATION (D3.js)
+    function renderTree(data) {
+        // [Logic to draw the lines and circles based on family data]
+        // This is where D3.js converts JSON into a visual diagram.
+    }
+
+    // Load data on start
+    async function loadTree() {
+        let { data: members } = await supabase.from('family_members').select('*');
+        if (members) renderTree(members);
+    }
+    loadTree();
+</script>
+</body>
+</html>
