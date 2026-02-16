@@ -3,26 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Family Lineage Graph</title>
+    <title>Classic Family Tree Graph</title>
     <script src="https://unpkg.com/d3@7"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; display: flex; margin: 0; height: 100vh; background: #f8f9fa; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; margin: 0; height: 100vh; background: #f4f7f6; }
         #sidebar { width: 320px; background: #2c3e50; color: white; padding: 20px; box-shadow: 2px 0 10px rgba(0,0,0,0.3); z-index: 10; overflow-y: auto; }
-        .form-group { margin-bottom: 12px; }
-        label { display: block; font-size: 0.8em; color: #bdc3c7; margin-bottom: 4px; }
-        input, select { width: 100%; padding: 8px; border-radius: 4px; border: none; margin-bottom: 10px; font-size: 14px; }
-        .btn { width: 100%; padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 0.8em; color: #bdc3c7; margin-bottom: 5px; }
+        input, select { width: 100%; padding: 10px; border-radius: 4px; border: none; background: #34495e; color: white; box-sizing: border-box; }
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 10px; transition: 0.2s; }
         #submit-btn { background: #27ae60; color: white; }
         #submit-btn:hover { background: #2ecc71; }
-        .btn-clear { background: #7f8c8d; color: white; margin-top: 8px; }
-        #main-view { flex-grow: 1; position: relative; overflow: hidden; }
-        svg { width: 100%; height: 100%; cursor: grab; }
-        .node circle { stroke: #fff; stroke-width: 2px; cursor: pointer; }
-        .node circle.selected { stroke: #f1c40f; stroke-width: 4px; }
-        .link { stroke: #999; stroke-opacity: 0.4; stroke-width: 2px; }
-        .spouse-link { stroke: #e74c3c; stroke-width: 3px; stroke-dasharray: 5,5; }
-        text { font-size: 13px; font-weight: bold; pointer-events: none; fill: #2c3e50; }
+        .btn-reset { background: #7f8c8d; color: white; }
+        
+        #main-view { flex-grow: 1; overflow: auto; background: white; position: relative; }
+        .node rect { fill: white; stroke: #3498db; stroke-width: 2px; rx: 6; ry: 6; cursor: pointer; }
+        .node.selected rect { stroke: #f1c40f; stroke-width: 4px; }
+        .node text { font-size: 13px; font-weight: 600; fill: #2c3e50; text-anchor: middle; pointer-events: none; }
+        .link { fill: none; stroke: #bdc3c7; stroke-width: 2px; }
+        .spouse-link { fill: none; stroke: #e74c3c; stroke-width: 3px; stroke-dasharray: 4; }
     </style>
 </head>
 <body>
@@ -35,22 +35,22 @@
     </div>
     <div class="form-group">
         <label>Parent 1</label>
-        <select id="parent-1-select"><option value="">None</option></select>
+        <select id="p1-select"><option value="">None</option></select>
     </div>
     <div class="form-group">
         <label>Parent 2</label>
-        <select id="parent-2-select"><option value="">None</option></select>
+        <select id="p2-select"><option value="">None</option></select>
     </div>
     <div class="form-group">
         <label>Spouse</label>
-        <select id="spouse-select"><option value="">None</option></select>
+        <select id="sp-select"><option value="">None</option></select>
     </div>
     <button id="submit-btn" class="btn" onclick="handleSave()">Save Member</button>
-    <button class="btn btn-clear" onclick="resetForm()">Clear / New Member</button>
+    <button class="btn btn-reset" onclick="resetForm()">New Member / Clear</button>
 </div>
 
 <div id="main-view">
-    <div id="graph"></div>
+    <div id="tree-canvas"></div>
 </div>
 
 <script>
@@ -58,140 +58,133 @@
     const SUPABASE_KEY = 'sb_publishable_jPDlKDqjVeOABl37jjWF2Q_nozLNYNj';
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    let selectedMemberId = null;
-    let allMembers = [];
+    let selectedId = null;
+    let allData = [];
 
     async function loadData() {
         const { data: members, error } = await supabaseClient.from('family_members').select('*');
         if (error) return console.error(error);
-        allMembers = members || [];
+        allData = members || [];
 
-        // Fill Dropdowns
-        const selects = ['parent-1-select', 'parent-2-select', 'spouse-select'];
-        selects.forEach(s => {
-            const el = document.getElementById(s);
+        const menus = ['p1-select', 'p2-select', 'sp-select'];
+        menus.forEach(id => {
+            const el = document.getElementById(id);
             el.innerHTML = '<option value="">None</option>';
-            allMembers.forEach(m => {
-                el.innerHTML += `<option value="${m.id}">${m.name}</option>`;
+            allData.forEach(m => el.innerHTML += `<option value="${m.id}">${m.name}</option>`);
+        });
+
+        drawClassicTree(allData);
+    }
+
+    function drawClassicTree(data) {
+        d3.select("#tree-canvas").selectAll("*").remove();
+        const width = 1600, height = 1200;
+        const svg = d3.select("#tree-canvas").append("svg").attr("width", width).attr("height", height);
+        const g = svg.append("g").attr("transform", "translate(100,100)");
+
+        const nodeW = 140, nodeH = 50, vertGap = 120, horizGap = 180;
+
+        // 1. Level Calculation (Generations)
+        const nodes = data.map(d => ({ ...d }));
+        nodes.forEach(n => {
+            let depth = 0;
+            let current = n;
+            const visited = new Set();
+            while (current && (current.parent_id || current.parent_2_id)) {
+                if (visited.has(current.id)) break; // Prevent infinite loops
+                visited.add(current.id);
+                depth++;
+                // Trace up through Parent 1 primarily for leveling
+                current = nodes.find(p => p.id == current.parent_id || p.id == current.parent_2_id);
+            }
+            n.level = depth;
+        });
+
+        // 2. Position Calculation
+        const levelCounts = {};
+        nodes.forEach(n => {
+            if (!levelCounts[n.level]) levelCounts[n.level] = 0;
+            n.x = levelCounts[n.level] * horizGap;
+            n.y = n.level * vertGap;
+            levelCounts[n.level]++;
+        });
+
+        // 3. Draw Links (Parents & Spouses)
+        nodes.forEach(n => {
+            [n.parent_id, n.parent_2_id].forEach(pid => {
+                if (pid) {
+                    const p = nodes.find(x => x.id == pid);
+                    if (p) {
+                        g.append("path").attr("class", "link")
+                            .attr("d", d3.linkVertical()({
+                                source: [p.x + nodeW/2, p.y + nodeH],
+                                target: [n.x + nodeW/2, n.y]
+                            }));
+                    }
+                }
             });
+            if (n.spouse_id) {
+                const s = nodes.find(x => x.id == n.spouse_id);
+                if (s) {
+                    g.append("line").attr("class", "spouse-link")
+                        .attr("x1", n.x + nodeW).attr("y1", n.y + nodeH/2)
+                        .attr("x2", s.x).attr("y2", s.y + nodeH/2);
+                }
+            }
         });
 
-        renderGraph(allMembers);
+        // 4. Draw Nodes
+        const nodeG = g.selectAll(".node").data(nodes).enter().append("g")
+            .attr("class", d => "node" + (d.id === selectedId ? " selected" : ""))
+            .attr("transform", d => `translate(${d.x},${d.y})`)
+            .on("click", (e, d) => editMode(d));
+
+        nodeG.append("rect").attr("width", nodeW).attr("height", nodeH);
+        nodeG.append("text").attr("x", nodeW/2).attr("y", nodeH/2 + 5).text(d => d.name);
     }
 
-    function renderGraph(data) {
-        const width = window.innerWidth - 320;
-        const height = window.innerHeight;
-
-        d3.select("#graph").selectAll("*").remove();
-        const svg = d3.select("#graph").append("svg")
-            .attr("viewBox", [0, 0, width, height]);
-        
-        const container = svg.append("g");
-
-        svg.call(d3.zoom().on("zoom", (event) => container.attr("transform", event.transform)));
-
-        // Relationships
-        const links = [];
-        data.forEach(d => {
-            if (d.parent_id) links.push({ source: d.parent_id, target: d.id, type: 'parent' });
-            if (d.parent_2_id) links.push({ source: d.parent_2_id, target: d.id, type: 'parent' });
-            if (d.spouse_id) links.push({ source: d.id, target: d.spouse_id, type: 'spouse' });
-        });
-
-        const simulation = d3.forceSimulation(data)
-            .force("link", d3.forceLink(links).id(d => d.id).distance(120))
-            .force("charge", d3.forceManyBody().strength(-400))
-            .force("center", d3.forceCenter(width / 2, height / 2));
-
-        const link = container.append("g")
-            .selectAll("line")
-            .data(links)
-            .join("line")
-            .attr("class", d => d.type === 'spouse' ? "spouse-link" : "link");
-
-        const node = container.append("g")
-            .selectAll("g")
-            .data(data)
-            .join("g")
-            .attr("class", "node")
-            .on("click", (event, d) => editMember(d))
-            .call(d3.drag()
-                .on("start", dragstarted)
-                .on("drag", dragged)
-                .on("end", dragended));
-
-        node.append("circle").attr("r", 15).attr("fill", "#3498db")
-            .classed("selected", d => d.id === selectedMemberId);
-
-        node.append("text").text(d => d.name).attr("x", 20).attr("y", 5);
-
-        simulation.on("tick", () => {
-            link.attr("x1", d => d.source.x)
-                .attr("y1", d => d.source.y)
-                .attr("x2", d => d.target.x)
-                .attr("y2", d => d.target.y);
-            node.attr("transform", d => `translate(${d.x},${d.y})`);
-        });
-
-        function dragstarted(e, d) { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; }
-        function dragged(e, d) { d.fx = e.x; d.fy = e.y; }
-        function dragended(e, d) { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }
-    }
-
-    function editMember(member) {
-        selectedMemberId = member.id;
-        document.getElementById('form-title').innerText = "📝 Edit: " + member.name;
-        document.getElementById('member-name').value = member.name;
-        document.getElementById('parent-1-select').value = member.parent_id || "";
-        document.getElementById('parent-2-select').value = member.parent_2_id || "";
-        document.getElementById('spouse-select').value = member.spouse_id || "";
+    function editMode(d) {
+        selectedId = d.id;
+        document.getElementById('form-title').innerText = "📝 Edit: " + d.name;
+        document.getElementById('member-name').value = d.name;
+        document.getElementById('p1-select').value = d.parent_id || "";
+        document.getElementById('p2-select').value = d.parent_2_id || "";
+        document.getElementById('sp-select').value = d.spouse_id || "";
         document.getElementById('submit-btn').innerText = "Update Member";
         document.getElementById('submit-btn').style.background = "#e67e22";
         
-        // Visual cue: highlight the circle
-        d3.selectAll("circle").classed("selected", false);
-        d3.selectAll("circle").filter(d => d.id === member.id).classed("selected", true);
+        drawClassicTree(allData); // Refresh to show highlight
     }
 
     function resetForm() {
-        selectedMemberId = null;
+        selectedId = null;
         document.getElementById('form-title').innerText = "➕ Add Member";
         document.getElementById('member-name').value = "";
-        document.getElementById('parent-1-select').value = "";
-        document.getElementById('parent-2-select').value = "";
-        document.getElementById('spouse-select').value = "";
+        document.getElementById('p1-select').value = "";
+        document.getElementById('p2-select').value = "";
+        document.getElementById('sp-select').value = "";
         document.getElementById('submit-btn').innerText = "Save Member";
         document.getElementById('submit-btn').style.background = "#27ae60";
-        d3.selectAll("circle").classed("selected", false);
+        drawClassicTree(allData);
     }
 
     async function handleSave() {
         const name = document.getElementById('member-name').value;
-        const p1 = document.getElementById('parent-1-select').value;
-        const p2 = document.getElementById('parent-2-select').value;
-        const sp = document.getElementById('spouse-select').value;
+        if (!name) return alert("Name is required");
 
-        if (!name) return alert("Please enter a name");
-
-        const memberData = {
+        const body = {
             name: name,
-            parent_id: p1 || null,
-            parent_2_id: p2 || null,
-            spouse_id: sp || null
+            parent_id: document.getElementById('p1-select').value || null,
+            parent_2_id: document.getElementById('p2-select').value || null,
+            spouse_id: document.getElementById('sp-select').value || null
         };
 
-        let result;
-        if (selectedMemberId) {
-            // Update Existing
-            result = await supabaseClient.from('family_members').update(memberData).eq('id', selectedMemberId);
+        if (selectedId) {
+            await supabaseClient.from('family_members').update(body).eq('id', selectedId);
         } else {
-            // Insert New
-            result = await supabaseClient.from('family_members').insert([memberData]);
+            await supabaseClient.from('family_members').insert([body]);
         }
-
-        if (result.error) alert(result.error.message);
-        else location.reload();
+        location.reload();
     }
 
     loadData();
