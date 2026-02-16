@@ -8,19 +8,27 @@
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; display: flex; margin: 0; height: 100vh; overflow: hidden; background: #f0f2f5; }
+        
         #sidebar { width: 320px; background: #2c3e50; color: white; padding: 25px; box-shadow: 4px 0 10px rgba(0,0,0,0.2); z-index: 10; overflow-y: auto; }
         h3 { margin-top: 0; color: #3498db; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-size: 0.85em; color: #bdc3c7; }
-        input, select { width: 100%; padding: 10px; border-radius: 4px; border: none; box-sizing: border-box; }
+        input, select { width: 100%; padding: 10px; border-radius: 4px; border: none; box-sizing: border-box; font-size: 1rem; }
+        
         .btn { width: 100%; padding: 12px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 10px; }
         .btn:hover { background: #2ecc71; }
         .btn-secondary { background: #7f8c8d; margin-top: 5px; }
-        #main-view { flex-grow: 1; position: relative; overflow: auto; display: flex; align-items: center; justify-content: center; }
+        
+        #main-view { flex-grow: 1; position: relative; overflow: auto; display: flex; align-items: flex-start; justify-content: center; background-color: #ffffff; }
+        #tree-container { padding-top: 50px; }
+
+        /* Tree Node Styling */
         .node circle { fill: #3498db; stroke: #fff; stroke-width: 3px; cursor: pointer; transition: 0.2s; }
+        .node circle:hover { fill: #e67e22; r: 18; }
         .node text { font: 14px sans-serif; font-weight: bold; pointer-events: none; text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff; }
         .link { fill: none; stroke: #bdc3c7; stroke-width: 2px; }
-        .instructions { position: absolute; bottom: 20px; right: 20px; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 5px; font-size: 0.8em; color: #333; border: 1px solid #ccc; }
+
+        .instructions { position: absolute; bottom: 20px; right: 20px; background: rgba(255,255,255,0.9); padding: 15px; border-radius: 8px; font-size: 0.85em; color: #333; border: 1px solid #ccc; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body>
@@ -48,10 +56,10 @@
 <div id="main-view">
     <div id="tree-container"></div>
     <div class="instructions">
-        <strong>How to use:</strong><br>
-        1. Add the oldest ancestor first.<br>
-        2. To link someone, select their parent from the list.<br>
-        3. Click any circle to edit that person.
+        <strong>Lineage Tools:</strong><br>
+        • Unconnected people appear at the top.<br>
+        • Click a name to select them.<br>
+        • Choose a parent and click "Update" to link branches.
     </div>
 </div>
 
@@ -60,7 +68,6 @@
     const SUPABASE_URL = 'https://qpeorqovecuyrutfbbkp.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_jPDlKDqjVeOABl37jjWF2Q_nozLNYNj';
     
-    // Using window.supabase to ensure the library is found
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let selectedMemberId = null;
@@ -77,7 +84,7 @@
             return;
         }
 
-        // Update dropdown
+        // Update Dropdown List
         const select = document.getElementById('parent-select');
         select.innerHTML = '<option value="">No Parent (Root)</option>';
         members.forEach(m => {
@@ -90,60 +97,76 @@
         if (members && members.length > 0) {
             renderTree(members);
         } else {
-            document.getElementById('tree-container').innerHTML = "<p style='color:#7f8c8d'>The tree is empty. Add the first person!</p>";
+            document.getElementById('tree-container').innerHTML = "<p style='margin-top:50px; color:#7f8c8d'>The tree is empty. Add your first family member!</p>";
         }
     }
 
-    // 3. DRAW THE TREE (D3.js)
+    // 3. RENDER TREE (Supports multiple disconnected branches)
     function renderTree(data) {
         d3.select("#tree-container").selectAll("*").remove();
         
-        const width = 800, height = 600;
+        // VIRTUAL ROOT LOGIC: Connects all separate trees so D3 doesn't error
+        const virtualRootId = "_VIRTUAL_ROOT_";
+        const dataWithVirtualRoot = [
+            { id: virtualRootId, name: "", parent_id: null },
+            ...data.map(d => ({
+                ...d,
+                parent_id: d.parent_id || virtualRootId 
+            }))
+        ];
+
+        const width = 900;
+        const height = 700;
 
         try {
             const stratify = d3.stratify()
                 .id(d => d.id)
                 .parentId(d => d.parent_id);
 
-            const root = stratify(data);
-            const treeLayout = d3.tree().size([width - 100, height - 200]);
+            const root = stratify(dataWithVirtualRoot);
+            
+            // Adjust tree size based on data
+            const treeLayout = d3.tree().size([width - 100, height - 250]);
             treeLayout(root);
 
             const svg = d3.select("#tree-container").append("svg")
                 .attr("width", width)
                 .attr("height", height)
                 .append("g")
-                .attr("transform", "translate(50,80)");
+                .attr("transform", "translate(50,50)");
 
-            // Draw Lines
+            // Draw Paths (Lines) - Filter out connections to the invisible root
             svg.selectAll(".link")
                 .data(root.links())
                 .enter().append("path")
                 .attr("class", "link")
+                .filter(d => d.source.id !== virtualRootId)
                 .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y));
 
-            // Draw People
+            // Draw Nodes (Circles) - Filter out the invisible root node
             const node = svg.selectAll(".node")
                 .data(root.descendants())
                 .enter().append("g")
                 .attr("class", "node")
+                .filter(d => d.id !== virtualRootId)
                 .attr("transform", d => `translate(${d.x},${d.y})`)
                 .on("click", (e, d) => selectMember(d.data));
 
             node.append("circle").attr("r", 15);
+
             node.append("text")
                 .attr("dy", ".35em")
-                .attr("y", 25)
+                .attr("y", 28)
                 .style("text-anchor", "middle")
                 .text(d => d.data.name);
 
         } catch (e) {
-            console.warn("Tree logic error:", e.message);
-            document.getElementById('tree-container').innerHTML = "<p style='color:#e74c3c'>Connect disconnected members by giving them a parent!</p>";
+            console.error("Lineage Loop Error:", e);
+            alert("Error: A family loop was detected (someone is their own ancestor). Please check your parent links!");
         }
     }
 
-    // 4. ADD / EDIT LOGIC
+    // 4. SAVE / UPDATE LOGIC
     async function handleSave() {
         const nameInput = document.getElementById('member-name');
         const yearInput = document.getElementById('birth-year');
@@ -159,18 +182,22 @@
 
         let response;
         if (selectedMemberId) {
+            // Update Existing
             response = await supabaseClient.from('family_members').update(payload).eq('id', selectedMemberId);
         } else {
+            // Insert New
             response = await supabaseClient.from('family_members').insert([payload]);
         }
 
         if (response.error) {
+            console.error("Save Error:", response.error.message);
             alert("Database Error: " + response.error.message);
         } else {
             location.reload(); 
         }
     }
 
+    // 5. HELPER FUNCTIONS
     function selectMember(member) {
         selectedMemberId = member.id;
         document.getElementById('form-title').innerText = "📝 Edit " + member.name;
@@ -178,6 +205,7 @@
         document.getElementById('birth-year').value = member.birth_year || "";
         document.getElementById('parent-select').value = member.parent_id || "";
         document.getElementById('submit-btn').innerText = "Update Member";
+        document.getElementById('submit-btn').style.background = "#e67e22";
     }
 
     function resetForm() {
@@ -187,9 +215,10 @@
         document.getElementById('birth-year').value = "";
         document.getElementById('parent-select').value = "";
         document.getElementById('submit-btn').innerText = "Save to Tree";
+        document.getElementById('submit-btn').style.background = "#27ae60";
     }
 
-    // Startup
+    // Initial Load
     loadData();
 </script>
 </body>
