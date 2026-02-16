@@ -3,35 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Classic Family Tree Graph</title>
+    <title>Modern Family Heritage</title>
     <script src="https://unpkg.com/d3@7"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; margin: 0; height: 100vh; background: #f4f7f6; }
-        #sidebar { width: 320px; background: #2c3e50; color: white; padding: 20px; box-shadow: 2px 0 10px rgba(0,0,0,0.3); z-index: 10; overflow-y: auto; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; font-size: 0.8em; color: #bdc3c7; margin-bottom: 5px; }
-        input, select { width: 100%; padding: 10px; border-radius: 4px; border: none; background: #34495e; color: white; box-sizing: border-box; }
-        .btn { width: 100%; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 10px; transition: 0.2s; }
-        #submit-btn { background: #27ae60; color: white; }
-        #submit-btn:hover { background: #2ecc71; }
-        .btn-reset { background: #7f8c8d; color: white; }
+        :root {
+            --primary: #2d5a27; /* Deep Sage */
+            --accent: #e67e22; /* Warm Orange */
+            --bg-sidebar: #1a1c1e;
+            --bg-canvas: #fcfaf7;
+            --text-main: #2c3e50;
+            --card-bg: #ffffff;
+        }
+
+        body { font-family: 'Inter', -apple-system, sans-serif; display: flex; margin: 0; height: 100vh; background: var(--bg-canvas); color: var(--text-main); }
         
-        #main-view { flex-grow: 1; overflow: auto; background: white; position: relative; }
-        .node rect { fill: white; stroke: #3498db; stroke-width: 2px; rx: 6; ry: 6; cursor: pointer; }
-        .node.selected rect { stroke: #f1c40f; stroke-width: 4px; }
-        .node text { font-size: 13px; font-weight: 600; fill: #2c3e50; text-anchor: middle; pointer-events: none; }
-        .link { fill: none; stroke: #bdc3c7; stroke-width: 2px; }
-        .spouse-link { fill: none; stroke: #e74c3c; stroke-width: 3px; stroke-dasharray: 4; }
+        /* Sidebar Styling */
+        #sidebar { 
+            width: 320px; background: var(--bg-sidebar); color: #fff; padding: 30px 20px; 
+            box-shadow: 5px 0 15px rgba(0,0,0,0.1); z-index: 10; overflow-y: auto;
+        }
+        h2 { font-weight: 300; letter-spacing: 1px; margin-bottom: 30px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 8px; }
+        input, select { 
+            width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #333; 
+            background: #25282c; color: #fff; font-size: 14px; transition: border 0.3s;
+        }
+        input:focus { border-color: var(--primary); outline: none; }
+        
+        .btn { 
+            width: 100%; padding: 14px; border: none; border-radius: 6px; cursor: pointer; 
+            font-weight: 600; font-size: 14px; margin-top: 10px; transition: all 0.2s ease;
+        }
+        #submit-btn { background: var(--primary); color: white; }
+        #submit-btn:hover { background: #3d7a35; transform: translateY(-1px); }
+        .btn-reset { background: transparent; color: #888; border: 1px solid #333; }
+        .btn-reset:hover { color: #fff; border-color: #555; }
+
+        /* Canvas Styling */
+        #main-view { flex-grow: 1; overflow: auto; position: relative; }
+        #tree-canvas { min-width: 2000px; min-height: 2000px; padding: 100px; }
+
+        .node rect { fill: var(--card-bg); stroke: #e0e0e0; stroke-width: 1px; rx: 8; ry: 8; transition: all 0.3s ease; }
+        .node:hover rect { stroke: var(--primary); filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1)); }
+        .node.selected rect { stroke: var(--primary); stroke-width: 3px; }
+        
+        .node text.name { font-size: 14px; font-weight: 600; fill: var(--text-main); }
+        .node text.year { font-size: 11px; fill: #999; }
+        
+        /* Relationship Lines */
+        .link { fill: none; stroke: #d1d8dd; stroke-width: 2px; transition: stroke 0.3s; }
+        .spouse-link { fill: none; stroke: var(--accent); stroke-width: 2px; stroke-dasharray: 6,4; opacity: 0.6; }
     </style>
 </head>
 <body>
 
 <div id="sidebar">
-    <h3 id="form-title">➕ Add Member</h3>
+    <h2 id="form-title">Heritage</h2>
     <div class="form-group">
-        <label>Name</label>
-        <input type="text" id="member-name" placeholder="Full Name">
+        <label>Full Name</label>
+        <input type="text" id="member-name" placeholder="Enter name...">
     </div>
     <div class="form-group">
         <label>Parent 1</label>
@@ -45,8 +77,8 @@
         <label>Spouse</label>
         <select id="sp-select"><option value="">None</option></select>
     </div>
-    <button id="submit-btn" class="btn" onclick="handleSave()">Save Member</button>
-    <button class="btn btn-reset" onclick="resetForm()">New Member / Clear</button>
+    <button id="submit-btn" class="btn" onclick="handleSave()">Save Connection</button>
+    <button class="btn btn-reset" onclick="resetForm()">Add New Person</button>
 </div>
 
 <div id="main-view">
@@ -78,29 +110,27 @@
 
     function drawClassicTree(data) {
         d3.select("#tree-canvas").selectAll("*").remove();
-        const width = 1600, height = 1200;
-        const svg = d3.select("#tree-canvas").append("svg").attr("width", width).attr("height", height);
-        const g = svg.append("g").attr("transform", "translate(100,100)");
+        const svg = d3.select("#tree-canvas").append("svg").attr("width", 2500).attr("height", 2000);
+        const g = svg.append("g").attr("transform", "translate(150,150)");
 
-        const nodeW = 140, nodeH = 50, vertGap = 120, horizGap = 180;
+        const nodeW = 160, nodeH = 60, vertGap = 150, horizGap = 220;
 
-        // 1. Level Calculation (Generations)
+        // Level Logic
         const nodes = data.map(d => ({ ...d }));
         nodes.forEach(n => {
             let depth = 0;
             let current = n;
             const visited = new Set();
             while (current && (current.parent_id || current.parent_2_id)) {
-                if (visited.has(current.id)) break; // Prevent infinite loops
+                if (visited.has(current.id)) break;
                 visited.add(current.id);
                 depth++;
-                // Trace up through Parent 1 primarily for leveling
                 current = nodes.find(p => p.id == current.parent_id || p.id == current.parent_2_id);
             }
             n.level = depth;
         });
 
-        // 2. Position Calculation
+        // Grid Positioning
         const levelCounts = {};
         nodes.forEach(n => {
             if (!levelCounts[n.level]) levelCounts[n.level] = 0;
@@ -109,74 +139,78 @@
             levelCounts[n.level]++;
         });
 
-        // 3. Draw Links (Parents & Spouses)
+        // "Elbow" Connectors
         nodes.forEach(n => {
             [n.parent_id, n.parent_2_id].forEach(pid => {
                 if (pid) {
                     const p = nodes.find(x => x.id == pid);
                     if (p) {
+                        const midY = (p.y + nodeH + n.y) / 2;
                         g.append("path").attr("class", "link")
-                            .attr("d", d3.linkVertical()({
-                                source: [p.x + nodeW/2, p.y + nodeH],
-                                target: [n.x + nodeW/2, n.y]
-                            }));
+                            .attr("d", `M ${p.x + nodeW/2} ${p.y + nodeH} 
+                                        L ${p.x + nodeW/2} ${midY} 
+                                        L ${n.x + nodeW/2} ${midY} 
+                                        L ${n.x + nodeW/2} ${n.y}`);
                     }
                 }
             });
             if (n.spouse_id) {
                 const s = nodes.find(x => x.id == n.spouse_id);
                 if (s) {
-                    g.append("line").attr("class", "spouse-link")
-                        .attr("x1", n.x + nodeW).attr("y1", n.y + nodeH/2)
-                        .attr("x2", s.x).attr("y2", s.y + nodeH/2);
+                    g.append("path").attr("class", "spouse-link")
+                        .attr("d", `M ${n.x + nodeW} ${n.y + nodeH/2} L ${s.x} ${s.y + nodeH/2}`);
                 }
             }
         });
 
-        // 4. Draw Nodes
+        // Render Cards
         const nodeG = g.selectAll(".node").data(nodes).enter().append("g")
             .attr("class", d => "node" + (d.id === selectedId ? " selected" : ""))
             .attr("transform", d => `translate(${d.x},${d.y})`)
             .on("click", (e, d) => editMode(d));
 
         nodeG.append("rect").attr("width", nodeW).attr("height", nodeH);
-        nodeG.append("text").attr("x", nodeW/2).attr("y", nodeH/2 + 5).text(d => d.name);
+        
+        nodeG.append("text").attr("class", "name")
+            .attr("x", nodeW/2).attr("y", nodeH/2 + 2)
+            .attr("text-anchor", "middle").text(d => d.name);
+
+        nodeG.append("text").attr("class", "year")
+            .attr("x", nodeW/2).attr("y", nodeH - 10)
+            .attr("text-anchor", "middle").text(d => d.birth_year ? `est. ${d.birth_year}` : "");
     }
 
     function editMode(d) {
         selectedId = d.id;
-        document.getElementById('form-title').innerText = "📝 Edit: " + d.name;
+        document.getElementById('form-title').innerText = "Edit Profile";
         document.getElementById('member-name').value = d.name;
         document.getElementById('p1-select').value = d.parent_id || "";
         document.getElementById('p2-select').value = d.parent_2_id || "";
-        document.getElementById('sp-select').value = d.spouse_id || "";
-        document.getElementById('submit-btn').innerText = "Update Member";
-        document.getElementById('submit-btn').style.background = "#e67e22";
-        
-        drawClassicTree(allData); // Refresh to show highlight
+        document.getElementById('spouse-select').value = d.spouse_id || "";
+        document.getElementById('submit-btn').innerText = "Update Record";
+        drawClassicTree(allData);
     }
 
     function resetForm() {
         selectedId = null;
-        document.getElementById('form-title').innerText = "➕ Add Member";
+        document.getElementById('form-title').innerText = "Heritage";
         document.getElementById('member-name').value = "";
         document.getElementById('p1-select').value = "";
         document.getElementById('p2-select').value = "";
-        document.getElementById('sp-select').value = "";
-        document.getElementById('submit-btn').innerText = "Save Member";
-        document.getElementById('submit-btn').style.background = "#27ae60";
+        document.getElementById('spouse-select').value = "";
+        document.getElementById('submit-btn').innerText = "Save Connection";
         drawClassicTree(allData);
     }
 
     async function handleSave() {
         const name = document.getElementById('member-name').value;
-        if (!name) return alert("Name is required");
+        if (!name) return;
 
         const body = {
             name: name,
             parent_id: document.getElementById('p1-select').value || null,
             parent_2_id: document.getElementById('p2-select').value || null,
-            spouse_id: document.getElementById('sp-select').value || null
+            spouse_id: document.getElementById('spouse-select').value || null
         };
 
         if (selectedId) {
