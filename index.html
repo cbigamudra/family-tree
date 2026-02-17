@@ -35,7 +35,7 @@
         .btn-reset { background: transparent; color: #888; border: 1px solid #333; }
 
         #main-view { flex-grow: 1; overflow: auto; position: relative; }
-        #tree-canvas { min-width: 6000px; min-height: 4000px; padding: 150px; }
+        #tree-canvas { min-width: 8000px; min-height: 4000px; padding: 150px; }
 
         .node rect { fill: var(--card-bg); stroke: #e0e0e0; stroke-width: 1px; rx: 8; ry: 8; cursor: pointer; }
         .node.selected rect { stroke: var(--primary); stroke-width: 3px; fill: #f0f7ef; }
@@ -99,46 +99,45 @@
 
     function drawTree(data) {
         d3.select("#tree-canvas").selectAll("*").remove();
-        const svg = d3.select("#tree-canvas").append("svg").attr("width", 6000).attr("height", 4000);
+        const svg = d3.select("#tree-canvas").append("svg").attr("width", 8000).attr("height", 4000);
         const g = svg.append("g").attr("transform", "translate(150,150)");
 
-        const nodeW = 160, nodeH = 50, vertGap = 160, islandGap = 450;
+        const nodeW = 160, nodeH = 50, vertGap = 180, islandGap = 500;
         const nodes = data.map(d => ({ ...d }));
 
-        // 1. Group into isolated "Family Islands"
+        // 1. Identify "Root" members (those with no parents defined)
         const roots = nodes.filter(n => !n.parent_id && !n.parent_2_id);
         let currentXOffset = 0;
 
+        // 2. Build each family as an independent cluster
         roots.forEach(root => {
-            const island = [];
-            const stack = [{ node: root, depth: 0 }];
+            const familyMembers = [];
             
-            // Build the island hierarchy
-            while (stack.length > 0) {
-                const { node, depth } = stack.pop();
-                if (!island.includes(node)) {
-                    node.level = depth;
-                    island.push(node);
-                    const children = nodes.filter(c => c.parent_id == node.id || c.parent_2_id == node.id);
-                    children.forEach(c => stack.push({ node: c, depth: depth + 1 }));
-                }
+            function collectFamily(node, depth) {
+                if (familyMembers.includes(node)) return;
+                node.level = depth;
+                familyMembers.push(node);
+                const children = nodes.filter(c => c.parent_id == node.id || c.parent_2_id == node.id);
+                children.forEach(c => collectFamily(c, depth + 1));
             }
 
-            // Position within this island only
-            const islandLevelCounts = {};
-            island.forEach(n => {
-                if (islandLevelCounts[n.level] === undefined) islandLevelCounts[n.level] = 0;
-                n.x = currentXOffset + (islandLevelCounts[n.level] * 220);
-                n.y = n.level * vertGap;
-                islandLevelCounts[n.level]++;
+            collectFamily(root, 0);
+
+            // Positioning logic strictly for THIS family cluster
+            const clusterLevelCounts = {};
+            familyMembers.forEach(m => {
+                if (clusterLevelCounts[m.level] === undefined) clusterLevelCounts[m.level] = 0;
+                m.x = currentXOffset + (clusterLevelCounts[m.level] * 240);
+                m.y = m.level * vertGap;
+                clusterLevelCounts[m.level]++;
             });
 
-            // Move the "Anchor" for the next island to the right
-            const islandWidth = Math.max(...Object.values(islandLevelCounts)) || 1;
-            currentXOffset += (islandWidth * 220) + islandGap;
+            // Calculate width of this cluster and move the offset for the next family
+            const clusterWidth = Math.max(...Object.values(clusterLevelCounts)) || 1;
+            currentXOffset += (clusterWidth * 240) + islandGap;
         });
 
-        // 2. Render Explicit Connections Only
+        // 3. Draw parent lines ONLY if IDs are explicitly linked
         nodes.forEach(n => {
             [n.parent_id, n.parent_2_id].forEach(pid => {
                 if (pid) {
@@ -151,6 +150,7 @@
                 }
             });
 
+            // 4. Draw spouse lines ONLY if explicitly selected
             if (n.spouse_id) {
                 const s = nodes.find(x => x.id == n.spouse_id);
                 if (s) {
@@ -160,7 +160,6 @@
             }
         });
 
-        // 3. Render Node Cards
         const nodeG = g.selectAll(".node").data(nodes).enter().append("g")
             .attr("class", d => "node" + (d.id === selectedId ? " selected" : ""))
             .attr("transform", d => `translate(${d.x},${d.y})`)
