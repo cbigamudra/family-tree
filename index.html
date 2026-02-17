@@ -3,44 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern Family Heritage</title>
+    <title>Family Heritage - Clean Version</title>
     <script src="https://unpkg.com/d3@7"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
-        :root {
-            --primary: #2d5a27; 
-            --accent: #e67e22; 
-            --bg-sidebar: #1a1c1e;
-            --bg-canvas: #fcfaf7;
-            --text-main: #2c3e50;
-            --card-bg: #ffffff;
-        }
-
-        body { font-family: 'Inter', sans-serif; display: flex; margin: 0; height: 100vh; background: var(--bg-canvas); color: var(--text-main); overflow: hidden; }
-        
-        #sidebar { 
-            width: 320px; background: var(--bg-sidebar); color: #fff; padding: 30px 20px; 
-            box-shadow: 5px 0 15px rgba(0,0,0,0.1); z-index: 10; overflow-y: auto;
-        }
-        h2 { font-weight: 300; letter-spacing: 1px; margin-bottom: 30px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        :root { --primary: #2d5a27; --accent: #e67e22; --bg-sidebar: #1a1c1e; --bg-canvas: #fcfaf7; --text-main: #2c3e50; --card-bg: #ffffff; }
+        body { font-family: 'Inter', sans-serif; display: flex; margin: 0; height: 100vh; background: var(--bg-canvas); overflow: hidden; }
+        #sidebar { width: 320px; background: var(--bg-sidebar); color: #fff; padding: 30px 20px; z-index: 10; overflow-y: auto; }
         .form-group { margin-bottom: 20px; }
-        label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 8px; }
-        input, select { 
-            width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #333; 
-            background: #25282c; color: #fff; font-size: 14px; box-sizing: border-box;
-        }
-        
-        .btn { width: 100%; padding: 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; margin-top: 10px; }
+        label { display: block; font-size: 11px; text-transform: uppercase; color: #888; margin-bottom: 8px; }
+        input, select { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #333; background: #25282c; color: #fff; box-sizing: border-box; }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; margin-top: 10px; }
         #submit-btn { background: var(--primary); color: white; }
+        .btn-delete { background: #8e2a2a; color: white; display: none; } /* Hidden until editing */
         .btn-reset { background: transparent; color: #888; border: 1px solid #333; }
-
-        #main-view { flex-grow: 1; overflow: auto; position: relative; }
-        #tree-canvas { min-width: 8000px; min-height: 4000px; padding: 150px; }
-
-        .node rect { fill: var(--card-bg); stroke: #e0e0e0; stroke-width: 1px; rx: 8; ry: 8; cursor: pointer; }
+        #main-view { flex-grow: 1; overflow: auto; cursor: grab; }
+        #tree-canvas { min-width: 8000px; min-height: 4000px; padding: 200px; }
+        .node rect { fill: var(--card-bg); stroke: #e0e0e0; rx: 8; ry: 8; cursor: pointer; }
         .node.selected rect { stroke: var(--primary); stroke-width: 3px; fill: #f0f7ef; }
         .node text { font-size: 13px; font-weight: 600; fill: var(--text-main); text-anchor: middle; pointer-events: none; }
-        
         .link { fill: none; stroke: #d1d8dd; stroke-width: 2px; }
         .spouse-link { fill: none; stroke: var(--accent); stroke-width: 2.5px; stroke-dasharray: 6,4; }
     </style>
@@ -49,29 +30,17 @@
 
 <div id="sidebar">
     <h2 id="form-title">Heritage</h2>
-    <div class="form-group">
-        <label>Full Name</label>
-        <input type="text" id="member-name" placeholder="Enter name...">
-    </div>
-    <div class="form-group">
-        <label>Parent 1</label>
-        <select id="p1-select"><option value="">None</option></select>
-    </div>
-    <div class="form-group">
-        <label>Parent 2</label>
-        <select id="p2-select"><option value="">None</option></select>
-    </div>
-    <div class="form-group">
-        <label>Spouse</label>
-        <select id="spouse-select"><option value="">None</option></select>
-    </div>
+    <div class="form-group"><label>Full Name</label><input type="text" id="member-name"></div>
+    <div class="form-group"><label>Parent 1</label><select id="p1-select"><option value="">None</option></select></div>
+    <div class="form-group"><label>Parent 2</label><select id="p2-select"><option value="">None</option></select></div>
+    <div class="form-group"><label>Spouse</label><select id="spouse-select"><option value="">None</option></select></div>
+    
     <button id="submit-btn" class="btn" onclick="handleSave()">Save Connection</button>
+    <button id="delete-btn" class="btn btn-delete" onclick="handleDelete()">Delete Member</button>
     <button class="btn btn-reset" onclick="resetForm()">Add New Person</button>
 </div>
 
-<div id="main-view">
-    <div id="tree-canvas"></div>
-</div>
+<div id="main-view"><div id="tree-canvas"></div></div>
 
 <script>
     const SUPABASE_URL = 'https://qpeorqovecuyrutfbbkp.supabase.co';
@@ -82,18 +51,15 @@
     let allData = [];
 
     async function loadData() {
-        const { data: members, error } = await supabaseClient.from('family_members').select('*');
-        if (error) return console.error(error);
-        allData = members || [];
+        const { data, error } = await supabaseClient.from('family_members').select('*');
+        if (error) return;
+        allData = data || [];
 
         ['p1-select', 'p2-select', 'spouse-select'].forEach(id => {
             const el = document.getElementById(id);
-            if (el) {
-                el.innerHTML = '<option value="">None</option>';
-                allData.forEach(m => el.innerHTML += `<option value="${m.id}">${m.name}</option>`);
-            }
+            el.innerHTML = '<option value="">None</option>';
+            allData.forEach(m => el.innerHTML += `<option value="${m.id}">${m.name}</option>`);
         });
-
         drawTree(allData);
     }
 
@@ -102,71 +68,58 @@
         const svg = d3.select("#tree-canvas").append("svg").attr("width", 8000).attr("height", 4000);
         const g = svg.append("g").attr("transform", "translate(150,150)");
 
-        const nodeW = 160, nodeH = 50, vertGap = 180, islandGap = 500;
+        const nodeW = 160, nodeH = 50, vertGap = 200, islandGap = 600;
         const nodes = data.map(d => ({ ...d }));
 
-        // 1. Identify "Root" members (those with no parents defined)
+        // 1. Separate into "Islands" (Family Trees)
         const roots = nodes.filter(n => !n.parent_id && !n.parent_2_id);
-        let currentXOffset = 0;
+        let currentX = 0;
 
-        // 2. Build each family as an independent cluster
         roots.forEach(root => {
-            const familyMembers = [];
-            
-            function collectFamily(node, depth) {
-                if (familyMembers.includes(node)) return;
-                node.level = depth;
-                familyMembers.push(node);
-                const children = nodes.filter(c => c.parent_id == node.id || c.parent_2_id == node.id);
-                children.forEach(c => collectFamily(c, depth + 1));
-            }
+            const family = [];
+            const walk = (n, d) => {
+                if (family.includes(n)) return;
+                n.level = d;
+                family.push(n);
+                nodes.filter(c => c.parent_id == n.id || c.parent_2_id == n.id).forEach(c => walk(c, d + 1));
+            };
+            walk(root, 0);
 
-            collectFamily(root, 0);
-
-            // Positioning logic strictly for THIS family cluster
-            const clusterLevelCounts = {};
-            familyMembers.forEach(m => {
-                if (clusterLevelCounts[m.level] === undefined) clusterLevelCounts[m.level] = 0;
-                m.x = currentXOffset + (clusterLevelCounts[m.level] * 240);
+            const levels = {};
+            family.forEach(m => {
+                if (levels[m.level] === undefined) levels[m.level] = 0;
+                m.x = currentX + (levels[m.level] * 250);
                 m.y = m.level * vertGap;
-                clusterLevelCounts[m.level]++;
+                levels[m.level]++;
             });
 
-            // Calculate width of this cluster and move the offset for the next family
-            const clusterWidth = Math.max(...Object.values(clusterLevelCounts)) || 1;
-            currentXOffset += (clusterWidth * 240) + islandGap;
+            const maxInLevel = Math.max(...Object.values(levels)) || 1;
+            currentX += (maxInLevel * 250) + islandGap;
         });
 
-        // 3. Draw parent lines ONLY if IDs are explicitly linked
+        // 2. Links
         nodes.forEach(n => {
             [n.parent_id, n.parent_2_id].forEach(pid => {
-                if (pid) {
-                    const p = nodes.find(x => x.id == pid);
-                    if (p) {
-                        const midY = (p.y + nodeH + n.y) / 2;
-                        g.append("path").attr("class", "link")
-                            .attr("d", `M ${p.x + nodeW/2} ${p.y + nodeH} L ${p.x + nodeW/2} ${midY} L ${n.x + nodeW/2} ${midY} L ${n.x + nodeW/2} ${n.y}`);
-                    }
+                const p = nodes.find(x => x.id == pid);
+                if (p) {
+                    const midY = (p.y + nodeH + n.y) / 2;
+                    g.append("path").attr("class", "link").attr("d", `M ${p.x+nodeW/2} ${p.y+nodeH} L ${p.x+nodeW/2} ${midY} L ${n.x+nodeW/2} ${midY} L ${n.x+nodeW/2} ${n.y}`);
                 }
             });
-
-            // 4. Draw spouse lines ONLY if explicitly selected
             if (n.spouse_id) {
                 const s = nodes.find(x => x.id == n.spouse_id);
-                if (s) {
-                    g.append("path").attr("class", "spouse-link")
-                        .attr("d", `M ${n.x + nodeW} ${n.y + nodeH/2} L ${s.x} ${s.y + nodeH/2}`);
-                }
+                if (s) g.append("path").attr("class", "spouse-link").attr("d", `M ${n.x+nodeW} ${n.y+nodeH/2} L ${s.x} ${s.y+nodeH/2}`);
             }
         });
 
+        // 3. Nodes
         const nodeG = g.selectAll(".node").data(nodes).enter().append("g")
             .attr("class", d => "node" + (d.id === selectedId ? " selected" : ""))
             .attr("transform", d => `translate(${d.x},${d.y})`)
             .on("click", (e, d) => editMode(d));
 
         nodeG.append("rect").attr("width", nodeW).attr("height", nodeH);
-        nodeG.append("text").attr("class", "name").attr("x", nodeW/2).attr("y", nodeH/2 + 5).text(d => d.name);
+        nodeG.append("text").attr("x", nodeW/2).attr("y", nodeH/2+5).text(d => d.name);
     }
 
     function editMode(d) {
@@ -176,6 +129,7 @@
         document.getElementById('p1-select').value = d.parent_id || "";
         document.getElementById('p2-select').value = d.parent_2_id || "";
         document.getElementById('spouse-select').value = d.spouse_id || "";
+        document.getElementById('delete-btn').style.display = "block";
         drawTree(allData);
     }
 
@@ -183,9 +137,7 @@
         selectedId = null;
         document.getElementById('form-title').innerText = "Heritage";
         document.getElementById('member-name').value = "";
-        document.getElementById('p1-select').value = "";
-        document.getElementById('p2-select').value = "";
-        document.getElementById('spouse-select').value = "";
+        document.getElementById('delete-btn').style.display = "none";
         drawTree(allData);
     }
 
@@ -196,10 +148,17 @@
             parent_2_id: document.getElementById('p2-select').value || null,
             spouse_id: document.getElementById('spouse-select').value || null
         };
-        if (!body.name) return alert("Name required");
         if (selectedId) await supabaseClient.from('family_members').update(body).eq('id', selectedId);
         else await supabaseClient.from('family_members').insert([body]);
         location.reload();
+    }
+
+    async function handleDelete() {
+        if (!selectedId) return;
+        if (confirm("Delete this person?")) {
+            await supabaseClient.from('family_members').delete().eq('id', selectedId);
+            location.reload();
+        }
     }
 
     loadData();
