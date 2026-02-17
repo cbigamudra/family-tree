@@ -35,14 +35,14 @@
         .btn-reset { background: transparent; color: #888; border: 1px solid #333; }
 
         #main-view { flex-grow: 1; overflow: auto; position: relative; }
-        #tree-canvas { min-width: 5000px; min-height: 5000px; padding: 100px; }
+        #tree-canvas { min-width: 6000px; min-height: 4000px; padding: 150px; }
 
         .node rect { fill: var(--card-bg); stroke: #e0e0e0; stroke-width: 1px; rx: 8; ry: 8; cursor: pointer; }
         .node.selected rect { stroke: var(--primary); stroke-width: 3px; fill: #f0f7ef; }
         .node text { font-size: 13px; font-weight: 600; fill: var(--text-main); text-anchor: middle; pointer-events: none; }
         
         .link { fill: none; stroke: #d1d8dd; stroke-width: 2px; }
-        .spouse-link { fill: none; stroke: var(--accent); stroke-width: 2px; stroke-dasharray: 6,4; }
+        .spouse-link { fill: none; stroke: var(--accent); stroke-width: 2.5px; stroke-dasharray: 6,4; }
     </style>
 </head>
 <body>
@@ -94,61 +94,51 @@
             }
         });
 
-        drawClassicTree(allData);
+        drawTree(allData);
     }
 
-    function drawClassicTree(data) {
+    function drawTree(data) {
         d3.select("#tree-canvas").selectAll("*").remove();
-        const svg = d3.select("#tree-canvas").append("svg").attr("width", 5000).attr("height", 3000);
+        const svg = d3.select("#tree-canvas").append("svg").attr("width", 6000).attr("height", 4000);
         const g = svg.append("g").attr("transform", "translate(150,150)");
 
-        const nodeW = 160, nodeH = 60, vertGap = 180, horizGap = 200;
-
+        const nodeW = 160, nodeH = 50, vertGap = 160, islandGap = 450;
         const nodes = data.map(d => ({ ...d }));
-        
-        // 1. Calculate Generation Levels
-        nodes.forEach(n => {
-            let depth = 0, current = n, visited = new Set();
-            while (current && (current.parent_id || current.parent_2_id)) {
-                if (visited.has(current.id)) break;
-                visited.add(current.id);
-                depth++;
-                current = nodes.find(p => p.id == current.parent_id || p.id == current.parent_2_id);
-            }
-            n.level = depth;
-        });
 
-        // 2. Cluster Positioning (Spouses side-by-side)
-        const levels = [...new Set(nodes.map(n => n.level))].sort((a,b) => a-b);
-        levels.forEach(lvl => {
-            let currentX = 0;
-            const nodesInLevel = nodes.filter(n => n.level === lvl);
-            const placed = new Set();
+        // 1. Group into isolated "Family Islands"
+        const roots = nodes.filter(n => !n.parent_id && !n.parent_2_id);
+        let currentXOffset = 0;
 
-            nodesInLevel.forEach(n => {
-                if (placed.has(n.id)) return;
-
-                // Place Primary Node
-                n.x = currentX;
-                n.y = n.level * vertGap;
-                placed.add(n.id);
-
-                // Check for Spouse in same level
-                if (n.spouse_id) {
-                    const spouse = nodes.find(s => s.id == n.spouse_id && s.level === lvl);
-                    if (spouse && !placed.has(spouse.id)) {
-                        currentX += horizGap; 
-                        spouse.x = currentX;
-                        spouse.y = n.level * vertGap;
-                        placed.add(spouse.id);
-                    }
+        roots.forEach(root => {
+            const island = [];
+            const stack = [{ node: root, depth: 0 }];
+            
+            // Build the island hierarchy
+            while (stack.length > 0) {
+                const { node, depth } = stack.pop();
+                if (!island.includes(node)) {
+                    node.level = depth;
+                    island.push(node);
+                    const children = nodes.filter(c => c.parent_id == node.id || c.parent_2_id == node.id);
+                    children.forEach(c => stack.push({ node: c, depth: depth + 1 }));
                 }
-                // Add extra space before next family unit/individual
-                currentX += horizGap * 1.8; 
+            }
+
+            // Position within this island only
+            const islandLevelCounts = {};
+            island.forEach(n => {
+                if (islandLevelCounts[n.level] === undefined) islandLevelCounts[n.level] = 0;
+                n.x = currentXOffset + (islandLevelCounts[n.level] * 220);
+                n.y = n.level * vertGap;
+                islandLevelCounts[n.level]++;
             });
+
+            // Move the "Anchor" for the next island to the right
+            const islandWidth = Math.max(...Object.values(islandLevelCounts)) || 1;
+            currentXOffset += (islandWidth * 220) + islandGap;
         });
 
-        // 3. Draw Relationship Links
+        // 2. Render Explicit Connections Only
         nodes.forEach(n => {
             [n.parent_id, n.parent_2_id].forEach(pid => {
                 if (pid) {
@@ -160,6 +150,7 @@
                     }
                 }
             });
+
             if (n.spouse_id) {
                 const s = nodes.find(x => x.id == n.spouse_id);
                 if (s) {
@@ -169,14 +160,14 @@
             }
         });
 
-        // 4. Draw Node Cards
+        // 3. Render Node Cards
         const nodeG = g.selectAll(".node").data(nodes).enter().append("g")
             .attr("class", d => "node" + (d.id === selectedId ? " selected" : ""))
             .attr("transform", d => `translate(${d.x},${d.y})`)
             .on("click", (e, d) => editMode(d));
 
         nodeG.append("rect").attr("width", nodeW).attr("height", nodeH);
-        nodeG.append("text").attr("class", "name").attr("x", nodeW/2).attr("y", nodeH/2 + 6).text(d => d.name);
+        nodeG.append("text").attr("class", "name").attr("x", nodeW/2).attr("y", nodeH/2 + 5).text(d => d.name);
     }
 
     function editMode(d) {
@@ -186,8 +177,7 @@
         document.getElementById('p1-select').value = d.parent_id || "";
         document.getElementById('p2-select').value = d.parent_2_id || "";
         document.getElementById('spouse-select').value = d.spouse_id || "";
-        document.getElementById('submit-btn').innerText = "Update Record";
-        drawClassicTree(allData);
+        drawTree(allData);
     }
 
     function resetForm() {
@@ -197,23 +187,22 @@
         document.getElementById('p1-select').value = "";
         document.getElementById('p2-select').value = "";
         document.getElementById('spouse-select').value = "";
-        document.getElementById('submit-btn').innerText = "Save Connection";
-        drawClassicTree(allData);
+        drawTree(allData);
     }
 
     async function handleSave() {
-        const name = document.getElementById('member-name').value;
-        if (!name) return alert("Name required");
         const body = {
-            name: name,
+            name: document.getElementById('member-name').value,
             parent_id: document.getElementById('p1-select').value || null,
             parent_2_id: document.getElementById('p2-select').value || null,
             spouse_id: document.getElementById('spouse-select').value || null
         };
+        if (!body.name) return alert("Name required");
         if (selectedId) await supabaseClient.from('family_members').update(body).eq('id', selectedId);
         else await supabaseClient.from('family_members').insert([body]);
         location.reload();
     }
+
     loadData();
 </script>
 </body>
